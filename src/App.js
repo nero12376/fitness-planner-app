@@ -62,9 +62,13 @@ const fitnessPlan = [
 
 function App() {
   const [isSignedIn, setIsSignedIn] = useState(false);
-  const [message, setMessage] = useState('');
-  const [messageType, setMessageType] = useState(''); // 'success' or 'error'
+  const [message, setMessage] = useState({ text: '', type: '' }); // Combined message state
   const googleSignInButtonRef = useRef(null); // Ref for the Google Sign-In button
+
+  // Helper function to set messages
+  const displayMessage = (text, type) => {
+    setMessage({ text, type });
+  };
 
   // Load Google API Client Library (gapi) for Calendar API
   useEffect(() => {
@@ -85,7 +89,7 @@ function App() {
       });
     };
     scriptGapi.onerror = () => {
-      setMessage('Failed to load Google API script (gapi). Please check your network.', 'error');
+      displayMessage('Failed to load Google API script (gapi). Please check your network.', 'error');
       console.error('Failed to load Google API script (gapi).');
     };
     document.body.appendChild(scriptGapi);
@@ -117,14 +121,14 @@ function App() {
             { theme: 'outline', size: 'large', text: 'signin_with', width: '200' } // Customize button appearance
           );
         }
-        setMessage('Google Sign-In initialized. Please sign in.', 'info');
+        displayMessage('Google Sign-In initialized. Please sign in.', 'info');
       } else {
-        setMessage('Google Identity Services (GIS) not found. Ensure script is loaded.', 'error');
+        displayMessage('Google Identity Services (GIS) not found. Ensure script is loaded.', 'error');
         console.error('GIS is not defined. Google Identity Services script might not be loaded.');
       }
     };
     scriptGis.onerror = () => {
-      setMessage('Failed to load Google Identity Services script. Please check your network.', 'error');
+      displayMessage('Failed to load Google Identity Services script. Please check your network.', 'error');
       console.error('Failed to load Google Identity Services script.');
     };
     document.body.appendChild(scriptGis);
@@ -137,35 +141,15 @@ function App() {
   // Callback function for Google Identity Services authentication
   const handleCredentialResponse = (response) => {
     if (response.credential) {
-      // Decode the JWT to get user info (optional, but useful for display)
-      // const userObject = jwt_decode(response.credential);
-      // console.log(userObject);
-
-      // Store the access token for API calls
-      const accessToken = response.credential; // For GIS, credential is the ID token or access token depending on scope
-      // For calendar, we need the access token from the OAuth flow, not just the ID token.
-      // GIS's `callback` for `ux_mode: 'popup'` will give you the ID token.
-      // To get the access token for API calls, you need to use `gapi.auth2` or a more explicit OAuth flow.
-      // Given the deprecation, the best way is to use `google.accounts.oauth2.initCodeClient` or `initTokenClient`
-      // For simplicity in this direct client-side app, we'll rely on the gapi.client.setToken after sign-in.
-      // The `gapi.client` object needs to be authorized.
-
-      // Manual authorization after GIS sign-in (less ideal, but works for simple cases)
-      // A more robust solution involves `google.accounts.oauth2.initTokenClient`
-      // For now, we'll just assume the user is signed in if they get a credential.
-      // The actual access token for gapi.client calls needs to come from the OAuth flow.
-      // This part requires a slight adjustment to how the token is obtained.
-
-      // Let's adjust the sign-in flow to use a more direct OAuth token client for gapi.client calls.
-      // The GIS 'renderButton' is for ID token, not direct access token for gapi.client.
-      // We'll switch back to a manual button click that triggers the token client.
+      // For GIS, `response.credential` is typically an ID token.
+      // To get an access token for gapi.client calls, we need to use the token client.
+      // This callback is primarily for the initial sign-in state.
+      // The actual access token will be requested by `handleSignIn` via `tokenClient.current.requestAccessToken()`.
       setIsSignedIn(true);
-      setMessage('Signed in to Google. You can now add events to your calendar!', 'success');
-      // The actual access token will be obtained when `handleSignIn` is clicked
-      // using the `tokenClient` initialized below.
+      displayMessage('Signed in to Google. You can now add events to your calendar!', 'success');
     } else {
       setIsSignedIn(false);
-      setMessage('Google sign-in failed.', 'error');
+      displayMessage('Google sign-in failed.', 'error');
     }
   };
 
@@ -183,10 +167,10 @@ function App() {
               access_token: tokenResponse.access_token
             });
             setIsSignedIn(true);
-            setMessage('Signed in to Google. You can now add events to your calendar!', 'success');
+            displayMessage('Signed in to Google. You can now add events to your calendar!', 'success');
           } else {
             setIsSignedIn(false);
-            setMessage('Failed to get access token for Google Calendar.', 'error');
+            displayMessage('Failed to get access token for Google Calendar.', 'error');
           }
         },
       });
@@ -198,39 +182,39 @@ function App() {
     if (tokenClient.current) {
       tokenClient.current.requestAccessToken(); // Request the access token
     } else {
-      setMessage('Google Sign-In not initialized. Please refresh.', 'error');
+      displayMessage('Google Sign-In not initialized. Please refresh.', 'error');
     }
   };
 
   const handleSignOut = () => {
     if (window.google && window.google.accounts && window.google.accounts.oauth2) {
       // Revoke the token
-      const accessToken = window.gapi.client.getToken()?.access_token;
-      if (accessToken) {
-        window.google.accounts.oauth2.revoke(accessToken, () => {
+      const accessTokenToRevoke = window.gapi.client.getToken()?.access_token;
+      if (accessTokenToRevoke) {
+        window.google.accounts.oauth2.revoke(accessTokenToRevoke, () => {
           window.gapi.client.setToken(''); // Clear the token from gapi.client
           setIsSignedIn(false);
-          setMessage('Signed out of Google.', 'info');
+          displayMessage('Signed out of Google.', 'info');
         });
       } else {
         setIsSignedIn(false); // Already signed out or no token
-        setMessage('Signed out of Google.', 'info');
+        displayMessage('Signed out of Google.', 'info');
       }
     }
   };
 
   const addEventToCalendar = async (day, activity) => {
     if (!isSignedIn) {
-      setMessage('Please sign in to Google first.', 'error');
+      displayMessage('Please sign in to Google first.', 'error');
       return;
     }
     if (!window.gapi || !window.gapi.client || !window.gapi.client.calendar) {
-        setMessage('Google Calendar API not ready. Please wait a moment and try again.', 'error');
+        displayMessage('Google Calendar API not ready. Please wait a moment and try again.', 'error');
         return;
     }
 
 
-    setMessage('Adding event to calendar...', 'info');
+    displayMessage('Adding event to calendar...', 'info');
 
     try {
       // Get current date to set events for the current week/future
@@ -314,11 +298,11 @@ function App() {
 
       const response = await request;
       console.log('Event created:', response.result);
-      setMessage(`Event "${event.summary}" added to your Google Calendar!`, 'success');
+      displayMessage(`Event "${event.summary}" added to your Google Calendar!`, 'success');
 
     } catch (error) {
       console.error('Error adding event to calendar:', error);
-      setMessage(`Failed to add event: ${error.message || 'Unknown error'}`, 'error');
+      displayMessage(`Failed to add event: ${error.message || 'Unknown error'}`, 'error');
     }
   };
 
@@ -367,9 +351,9 @@ function App() {
         <p className="text-lg text-gray-600">2-Month Journey to Leaner Thighs & Stronger Core</p>
       </header>
 
-      {message && (
-        <div className={`p-4 mb-6 rounded-lg shadow-md text-center ${messageType === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-          {message}
+      {message.text && (
+        <div className={`p-4 mb-6 rounded-lg shadow-md text-center ${message.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+          {message.text}
         </div>
       )}
 
