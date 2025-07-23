@@ -382,7 +382,7 @@ function App() {
       </div>
 
       <footer className="text-center py-8 mt-12 text-gray-500 text-sm">
-        <p>&copy; 2024 Fitness Planner. All rights reserved.</p>
+        <p>&copy; 2025 Fitness Planner. All rights reserved.</p>
       </footer>
     </div>
   );
