@@ -17,7 +17,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react'; // Impo
 //      Again, this is often dynamically handled, but keep it in mind if you encounter issues.
 //      A common fallback for some environments might be `http://localhost`.
 // 8. Copy the "Your Client ID" that is generated.
-const CLIENT_ID = '729067439732-lpki3rudvja4gs75v83qeq4vtfhajv20.apps.googleusercontent.com'; // <--- REPLACE THIS
+const CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID; // <--- REPLACE THIS
 
 // Google API scopes needed for Calendar access
 const SCOPES = 'https://www.googleapis.com/auth/calendar.events'; // Corrected scope URL - removed duplicate part
