@@ -136,7 +136,8 @@ function App() {
     return () => {
       document.body.removeChild(scriptGis);
     };
-  }, []);
+  }, [handleCredentialResponse]); // Added handleCredentialResponse to dependency array
+
 
   // Callback function for Google Identity Services authentication
   const handleCredentialResponse = (response) => {
