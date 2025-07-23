@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react'; // Import useCallback
 
 // IMPORTANT: Replace with your actual Google Cloud Project Client ID
 // Follow these steps to get your Client ID:
@@ -70,6 +70,22 @@ function App() {
     setMessage({ text, type });
   };
 
+  // Callback function for Google Identity Services authentication
+  // Wrapped in useCallback to prevent it from changing on every render
+  const handleCredentialResponse = useCallback((response) => {
+    if (response.credential) {
+      // For GIS, `response.credential` is typically an ID token.
+      // To get an access token for gapi.client calls, we need to use the token client.
+      // This callback is primarily for the initial sign-in state.
+      // The actual access token will be requested by `handleSignIn` via `tokenClient.current.requestAccessToken()`.
+      setIsSignedIn(true);
+      displayMessage('Signed in to Google. You can now add events to your calendar!', 'success');
+    } else {
+      setIsSignedIn(false);
+      displayMessage('Google sign-in failed.', 'error');
+    }
+  }, [displayMessage]); // displayMessage is a dependency because it's used inside
+
   // Load Google API Client Library (gapi) for Calendar API
   useEffect(() => {
     const scriptGapi = document.createElement('script');
@@ -97,7 +113,7 @@ function App() {
     return () => {
       document.body.removeChild(scriptGapi);
     };
-  }, []);
+  }, [displayMessage]); // displayMessage is a dependency
 
   // Load Google Identity Services (GIS) for authentication
   useEffect(() => {
@@ -136,23 +152,8 @@ function App() {
     return () => {
       document.body.removeChild(scriptGis);
     };
-  }, [handleCredentialResponse]); // Added handleCredentialResponse to dependency array
+  }, [handleCredentialResponse, displayMessage]); // Added handleCredentialResponse and displayMessage to dependency array
 
-
-  // Callback function for Google Identity Services authentication
-  const handleCredentialResponse = (response) => {
-    if (response.credential) {
-      // For GIS, `response.credential` is typically an ID token.
-      // To get an access token for gapi.client calls, we need to use the token client.
-      // This callback is primarily for the initial sign-in state.
-      // The actual access token will be requested by `handleSignIn` via `tokenClient.current.requestAccessToken()`.
-      setIsSignedIn(true);
-      displayMessage('Signed in to Google. You can now add events to your calendar!', 'success');
-    } else {
-      setIsSignedIn(false);
-      displayMessage('Google sign-in failed.', 'error');
-    }
-  };
 
   const tokenClient = useRef(null); // Ref to store the token client
 
@@ -176,7 +177,7 @@ function App() {
         },
       });
     }
-  }, []);
+  }, [displayMessage]); // displayMessage is a dependency
 
 
   const handleSignIn = () => {
