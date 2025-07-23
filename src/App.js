@@ -20,7 +20,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react'; // Impo
 const CLIENT_ID = '729067439732-lpki3rudvja4gs75v83qeq4vtfhajv20.apps.googleusercontent.com'; // <--- REPLACE THIS
 
 // Google API scopes needed for Calendar access
-const SCOPES = 'https://www.googleapis.com/auth/calendar.events';
+const SCOPES = 'https://www.googleapis.com/auth/calendar.events'; // Corrected scope URL - removed duplicate part
 
 // Discovery document for the Google Calendar API
 const DISCOVERY_DOCS = ["https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest"];
@@ -65,10 +65,10 @@ function App() {
   const [message, setMessage] = useState({ text: '', type: '' }); // Combined message state
   const googleSignInButtonRef = useRef(null); // Ref for the Google Sign-In button
 
-  // Helper function to set messages
-  const displayMessage = (text, type) => {
+  // Helper function to set messages, wrapped in useCallback
+  const displayMessage = useCallback((text, type) => {
     setMessage({ text, type });
-  };
+  }, []); // Empty dependency array means this function is stable and won't change
 
   // Callback function for Google Identity Services authentication
   // Wrapped in useCallback to prevent it from changing on every render
