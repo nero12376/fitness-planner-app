@@ -20,7 +20,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react'; // Impo
 const CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID; // <--- REPLACE THIS
 
 // Google API scopes needed for Calendar access
-const SCOPES = 'https://www.googleapis.com/auth/calendar.events'; // Corrected scope URL - removed duplicate part
+const SCOPES = 'https://www.googleapis.com/auth/calendar.events';
 
 // Discovery document for the Google Calendar API
 const DISCOVERY_DOCS = ["https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest"];
@@ -64,6 +64,7 @@ function App() {
   const [isSignedIn, setIsSignedIn] = useState(false);
   const [message, setMessage] = useState({ text: '', type: '' }); // Combined message state
   const googleSignInButtonRef = useRef(null); // Ref for the Google Sign-In button
+  const tokenClient = useRef(null); // Ref to store the token client
 
   // Helper function to set messages, wrapped in useCallback
   const displayMessage = useCallback((text, type) => {
@@ -71,20 +72,20 @@ function App() {
   }, []); // Empty dependency array means this function is stable and won't change
 
   // Callback function for Google Identity Services authentication
-  // Wrapped in useCallback to prevent it from changing on every render
+  // This callback is called after the user interacts with the GIS sign-in button
   const handleCredentialResponse = useCallback((response) => {
     if (response.credential) {
       // For GIS, `response.credential` is typically an ID token.
-      // To get an access token for gapi.client calls, we need to use the token client.
-      // This callback is primarily for the initial sign-in state.
-      // The actual access token will be requested by `handleSignIn` via `tokenClient.current.requestAccessToken()`.
+      // The actual access token for gapi.client calls is obtained via tokenClient.current.requestAccessToken()
+      // which is triggered by the manual handleSignIn click.
+      // We set isSignedIn here to update UI, but the gapi.client token is set in tokenClient's callback.
       setIsSignedIn(true);
       displayMessage('Signed in to Google. You can now add events to your calendar!', 'success');
     } else {
       setIsSignedIn(false);
       displayMessage('Google sign-in failed.', 'error');
     }
-  }, [displayMessage]); // displayMessage is a dependency because it's used inside
+  }, [displayMessage]);
 
   // Load Google API Client Library (gapi) for Calendar API
   useEffect(() => {
@@ -101,6 +102,7 @@ function App() {
           console.log('Google Calendar API client loaded.');
         }).catch(error => {
           console.error('Error initializing Google Calendar API client:', error);
+          displayMessage(`Error initializing Calendar API: ${error.details || error.message}`, 'error');
         });
       });
     };
@@ -113,7 +115,7 @@ function App() {
     return () => {
       document.body.removeChild(scriptGapi);
     };
-  }, [displayMessage]); // displayMessage is a dependency
+  }, [displayMessage]);
 
   // Load Google Identity Services (GIS) for authentication
   useEffect(() => {
@@ -126,8 +128,26 @@ function App() {
         window.google.accounts.id.initialize({
           client_id: CLIENT_ID,
           scope: SCOPES,
-          callback: handleCredentialResponse, // This function will be called after sign-in
+          callback: handleCredentialResponse, // This will handle the initial ID token response
           ux_mode: 'popup', // Use 'popup' for better integration within an iframe/app
+        });
+
+        // Initialize the Google OAuth 2.0 Token Client for explicit access token requests
+        tokenClient.current = window.google.accounts.oauth2.initTokenClient({
+          client_id: CLIENT_ID,
+          scope: SCOPES,
+          callback: (tokenResponse) => {
+            if (tokenResponse.access_token) {
+              window.gapi.client.setToken({
+                access_token: tokenResponse.access_token
+              });
+              setIsSignedIn(true);
+              displayMessage('Signed in to Google. You can now add events to your calendar!', 'success');
+            } else {
+              setIsSignedIn(false);
+              displayMessage('Failed to get access token for Google Calendar.', 'error');
+            }
+          },
         });
 
         // Render the Google Sign-In button
@@ -152,37 +172,13 @@ function App() {
     return () => {
       document.body.removeChild(scriptGis);
     };
-  }, [handleCredentialResponse, displayMessage]); // Added handleCredentialResponse and displayMessage to dependency array
-
-
-  const tokenClient = useRef(null); // Ref to store the token client
-
-  // Initialize the Google OAuth 2.0 Token Client
-  useEffect(() => {
-    if (window.google && window.google.accounts && window.google.accounts.oauth2) {
-      tokenClient.current = window.google.accounts.oauth2.initTokenClient({
-        client_id: CLIENT_ID,
-        scope: SCOPES,
-        callback: (tokenResponse) => {
-          if (tokenResponse.access_token) {
-            window.gapi.client.setToken({
-              access_token: tokenResponse.access_token
-            });
-            setIsSignedIn(true);
-            displayMessage('Signed in to Google. You can now add events to your calendar!', 'success');
-          } else {
-            setIsSignedIn(false);
-            displayMessage('Failed to get access token for Google Calendar.', 'error');
-          }
-        },
-      });
-    }
-  }, [displayMessage]); // displayMessage is a dependency
+  }, [handleCredentialResponse, displayMessage]);
 
 
   const handleSignIn = () => {
+    // This function now explicitly requests the access token using the tokenClient
     if (tokenClient.current) {
-      tokenClient.current.requestAccessToken(); // Request the access token
+      tokenClient.current.requestAccessToken();
     } else {
       displayMessage('Google Sign-In not initialized. Please refresh.', 'error');
     }
@@ -190,7 +186,6 @@ function App() {
 
   const handleSignOut = () => {
     if (window.google && window.google.accounts && window.google.accounts.oauth2) {
-      // Revoke the token
       const accessTokenToRevoke = window.gapi.client.getToken()?.access_token;
       if (accessTokenToRevoke) {
         window.google.accounts.oauth2.revoke(accessTokenToRevoke, () => {
@@ -210,8 +205,9 @@ function App() {
       displayMessage('Please sign in to Google first.', 'error');
       return;
     }
-    if (!window.gapi || !window.gapi.client || !window.gapi.client.calendar) {
-        displayMessage('Google Calendar API not ready. Please wait a moment and try again.', 'error');
+    // Ensure gapi.client.calendar is loaded and token is set
+    if (!window.gapi || !window.gapi.client || !window.gapi.client.calendar || !window.gapi.client.getToken()?.access_token) {
+        displayMessage('Google Calendar API not fully ready or token missing. Please sign in again or wait a moment.', 'error');
         return;
     }
 
@@ -382,7 +378,7 @@ function App() {
       </div>
 
       <footer className="text-center py-8 mt-12 text-gray-500 text-sm">
-        <p>&copy; 2025 Fitness Planner. All rights reserved.</p>
+        <p>&copy; 2024 Fitness Planner. All rights reserved.</p>
       </footer>
     </div>
   );
